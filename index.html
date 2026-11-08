@@ -1,0 +1,1494 @@
+<!DOCTYPE html>
+<html lang="es" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AudioSub - Lector de Subtítulos y Gestor de Tareas</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    html, body {
+      height: 100%;
+      background-color: #07090e !important;
+      color: #f1f5f9 !important;
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+    }
+
+    /* Master Layout */
+    .app-root {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      background: radial-gradient(circle at 80% 10%, rgba(30, 27, 75, 0.35) 0%, transparent 45%),
+                  radial-gradient(circle at 20% 90%, rgba(15, 23, 42, 0.4) 0%, transparent 50%),
+                  #07090e;
+    }
+
+    /* Barra Vertical Lateral Fija con Estética DAW / Estudio */
+    .fixed-sidebar {
+      width: 360px;
+      min-width: 320px;
+      max-width: 380px;
+      height: 100%;
+      background: linear-gradient(180deg, rgba(13, 17, 28, 0.98) 0%, rgba(8, 11, 18, 0.99) 100%);
+      border-right: 1px solid rgba(255, 255, 255, 0.08);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      z-index: 40;
+      box-shadow: 8px 0 32px rgba(0, 0, 0, 0.6);
+    }
+
+    .sidebar-scrollable {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.15rem;
+    }
+
+    /* Cuadro Principal de Subtítulos con Scroll */
+    .main-content {
+      flex: 1 1 auto;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: transparent;
+    }
+
+    .subtitles-scroll-box {
+      flex: 1 1 auto;
+      overflow-y: auto !important;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.85rem;
+    }
+
+    /* Glass Cards & Containers */
+    .glass-deck {
+      background: linear-gradient(145deg, rgba(20, 27, 45, 0.85) 0%, rgba(12, 17, 30, 0.9) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 1.25rem;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      position: relative;
+    }
+
+    /* Botones Táctiles del Reproductor */
+    .player-btn-main {
+      position: relative;
+      width: 56px;
+      height: 56px;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+      color: #ffffff;
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4), inset 0 2px 2px rgba(255, 255, 255, 0.3);
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      cursor: pointer;
+    }
+    .player-btn-main:hover {
+      transform: translateY(-2px) scale(1.03);
+      box-shadow: 0 8px 26px rgba(99, 102, 241, 0.6), inset 0 2px 3px rgba(255, 255, 255, 0.45);
+      background: linear-gradient(135deg, #7c3aed 0%, #6366f1 100%);
+    }
+    .player-btn-main:active {
+      transform: translateY(1px) scale(0.97);
+      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.4);
+    }
+    .player-btn-main.is-playing {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+      box-shadow: 0 6px 20px rgba(245, 158, 11, 0.45), inset 0 2px 2px rgba(255, 255, 255, 0.35);
+    }
+    .player-btn-main.is-playing:hover {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      box-shadow: 0 8px 26px rgba(245, 158, 11, 0.65);
+    }
+
+    .player-btn-secondary {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(180deg, rgba(28, 36, 56, 0.85) 0%, rgba(16, 22, 38, 0.95) 100%);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      transition: all 0.15s ease;
+      cursor: pointer;
+    }
+    .player-btn-secondary:hover {
+      background: linear-gradient(180deg, rgba(40, 52, 80, 0.9) 0%, rgba(24, 33, 56, 0.95) 100%);
+      color: #f8fafc;
+      border-color: rgba(99, 102, 241, 0.35);
+      transform: translateY(-1px);
+    }
+    .player-btn-secondary:active {
+      transform: translateY(1px);
+      box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    .player-btn-stop:hover {
+      border-color: rgba(244, 63, 94, 0.4) !important;
+      color: #fb7185 !important;
+    }
+
+    /* Subtitle Cue Cards Styling */
+    .cue-card {
+      background: linear-gradient(145deg, rgba(18, 24, 40, 0.7) 0%, rgba(11, 16, 28, 0.8) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-left: 4px solid rgba(255, 255, 255, 0.1);
+      border-radius: 1.15rem;
+      padding: 1.1rem 1.25rem;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      cursor: pointer;
+      position: relative;
+    }
+    .cue-card:hover {
+      background: linear-gradient(145deg, rgba(26, 35, 58, 0.85) 0%, rgba(16, 23, 40, 0.9) 100%);
+      border-color: rgba(255, 255, 255, 0.14);
+      border-left-color: rgba(99, 102, 241, 0.5);
+      transform: translateX(2px);
+    }
+    .cue-card-active {
+      background: linear-gradient(145deg, rgba(35, 32, 85, 0.95) 0%, rgba(20, 18, 55, 0.95) 100%) !important;
+      border: 1px solid rgba(129, 140, 248, 0.6) !important;
+      border-left: 5px solid #818cf8 !important;
+      box-shadow: 0 8px 30px rgba(99, 102, 241, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.15) !important;
+    }
+    .cue-card-completed {
+      opacity: 0.65;
+      border-left-color: #10b981 !important;
+    }
+    .cue-card-completed:hover {
+      opacity: 0.9;
+    }
+
+    /* Interactive Checkbox */
+    .task-check-circle {
+      width: 22px;
+      height: 22px;
+      border-radius: 7px;
+      border: 1.5px solid rgba(255, 255, 255, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+      background: rgba(15, 23, 42, 0.6);
+      cursor: pointer;
+    }
+    .task-check-circle:hover {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+    }
+    .task-check-circle.checked {
+      background: #10b981;
+      border-color: #10b981;
+      color: #ffffff;
+      box-shadow: 0 0 10px rgba(16, 185, 129, 0.4);
+    }
+
+    /* Custom Range Slider */
+    input[type=range] {
+      -webkit-appearance: none;
+      background: transparent;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 14px;
+      width: 14px;
+      border-radius: 50%;
+      background: #818cf8;
+      cursor: pointer;
+      border: 2px solid #ffffff;
+      box-shadow: 0 0 8px rgba(99, 102, 241, 0.6);
+      transition: transform 0.1s ease;
+    }
+    input[type=range]::-webkit-slider-thumb:hover {
+      transform: scale(1.25);
+    }
+
+    /* Equalizer Frequency Bars */
+    .eq-bar {
+      transition: height 0.12s ease;
+    }
+
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(15, 23, 42, 0.4);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(99, 102, 241, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(99, 102, 241, 0.7);
+    }
+
+    @media (max-width: 820px) {
+      .app-root {
+        flex-direction: column;
+      }
+      .fixed-sidebar {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        max-height: 48vh;
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .subtitles-scroll-box {
+        padding: 1rem;
+      }
+    }
+  </style>
+</head>
+<body class="selection:bg-indigo-500 selection:text-white">
+
+  <div class="app-root">
+
+    <!-- 1. BARRA VERTICAL LATERAL FIJA DE CONTROLES -->
+    <aside class="fixed-sidebar" aria-label="Controles fijos">
+      
+      <!-- Encabezado de la barra lateral -->
+      <div class="h-16 px-4 border-b border-white/10 flex items-center justify-between bg-slate-950/70 shrink-0">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-600 flex items-center justify-center text-white shadow-lg shadow-indigo-600/30 border border-indigo-400/30">
+            <!-- Headphones SVG -->
+            <svg class="w-5 h-5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3 18v-6a9 9 0 0 1 18 0v6M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+            </svg>
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <h1 class="text-sm font-bold tracking-tight bg-gradient-to-r from-indigo-200 via-white to-purple-200 bg-clip-text text-transparent">
+                AudioSub Pro
+              </h1>
+              <span class="text-[9px] uppercase px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-mono">
+                TTS
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400">Controles Laterales Fijos</p>
+          </div>
+        </div>
+
+        <!-- Live Sync Pulse Dot -->
+        <div class="flex items-center gap-1.5 px-2 py-1 rounded-full bg-slate-900 border border-white/5 text-[10px] font-mono text-slate-400">
+          <span id="liveStatusDot" class="w-2 h-2 rounded-full bg-slate-600 transition-colors"></span>
+          <span id="liveStatusText">Listo</span>
+        </div>
+      </div>
+
+      <!-- Área Desplazable de la Barra Lateral -->
+      <div class="sidebar-scrollable">
+        
+        <!-- DECK 1: RELOJ DIGITAL & CONTROLES DEL REPRODUCTOR -->
+        <div class="glass-deck p-4">
+          <!-- Equalizer Spectrum Bars -->
+          <div class="flex justify-center items-end gap-1.5 h-6 mb-2.5 px-2" id="equalizer">
+            <div class="w-1.5 bg-indigo-500/30 rounded-full h-2 eq-bar"></div>
+            <div class="w-1.5 bg-indigo-500/50 rounded-full h-3 eq-bar"></div>
+            <div class="w-1.5 bg-indigo-400 rounded-full h-4 eq-bar"></div>
+            <div class="w-1.5 bg-purple-400 rounded-full h-6 eq-bar"></div>
+            <div class="w-1.5 bg-indigo-300 rounded-full h-5 eq-bar"></div>
+            <div class="w-1.5 bg-indigo-500 rounded-full h-3 eq-bar"></div>
+            <div class="w-1.5 bg-purple-500 rounded-full h-4 eq-bar"></div>
+            <div class="w-1.5 bg-indigo-500/50 rounded-full h-2 eq-bar"></div>
+          </div>
+
+          <!-- Digital Clock Display -->
+          <div class="text-center py-1 bg-slate-950/60 rounded-xl border border-white/5 mb-3 shadow-inner">
+            <div id="timeDisplay" class="font-mono text-3xl font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-indigo-200 via-indigo-100 to-white drop-shadow">
+              00:00:00.0
+            </div>
+            <div class="flex items-center justify-center gap-1 text-[10px] text-slate-400 font-mono mt-0.5">
+              <span>Sincronía Película / Audio</span>
+              <span id="offsetBadge" class="text-indigo-400 ml-1"></span>
+            </div>
+          </div>
+
+          <!-- Timeline Scrubber Bar -->
+          <div class="mb-3 px-1">
+            <input type="range" id="progressBar" min="0" max="100" value="0" step="0.1"
+                   class="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-indigo-500 focus:outline-none">
+            <div class="flex justify-between text-[10px] text-slate-400 font-mono mt-1">
+              <span id="currentTimeLabel">00:00</span>
+              <span id="totalTimeLabel">00:00</span>
+            </div>
+          </div>
+
+          <!-- PLAYER CONTROL BUTTONS WITH ADVANCED CSS & SYMBOLS -->
+          <div class="flex items-center justify-between gap-2 pt-2 border-t border-white/10">
+            
+            <!-- Rewind -5s -->
+            <button id="btnRewind" class="player-btn-secondary" title="Retroceder 5 segundos (Flecha Izquierda)">
+              <!-- Backward Symbol + 5s -->
+              <svg class="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M1 4v6h6M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+              </svg>
+              <span class="text-[9px] font-bold font-mono leading-none mt-0.5">-5s</span>
+            </button>
+
+            <!-- Play / Pause Master Button -->
+            <button id="btnPlayPause" class="player-btn-main" title="Reproducir / Pausar (Espacio)">
+              <!-- Play / Pause Dual Icons -->
+              <svg id="playSvg" class="w-6 h-6 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M7 5.5v13a1 1 0 0 0 1.55.83l10-6.5a1 1 0 0 0 0-1.66l-10-6.5A1 1 0 0 0 7 5.5z"/>
+              </svg>
+              <svg id="pauseSvg" class="w-6 h-6 fill-current hidden" viewBox="0 0 24 24">
+                <path d="M6 5.5A1.5 1.5 0 0 1 7.5 4h1A1.5 1.5 0 0 1 10 5.5v13A1.5 1.5 0 0 1 8.5 20h-1A1.5 1.5 0 0 1 6 18.5v-13zM14 5.5a1.5 1.5 0 0 1 1.5-1.5h1a1.5 1.5 0 0 1 1.5 1.5v13a1.5 1.5 0 0 1-1.5 1.5h-1a1.5 1.5 0 0 1-1.5-1.5v-13z"/>
+              </svg>
+            </button>
+
+            <!-- Stop Button -->
+            <button id="btnStop" class="player-btn-secondary player-btn-stop" title="Detener y volver al inicio">
+              <svg class="w-4 h-4 fill-current text-slate-300" viewBox="0 0 24 24">
+                <rect x="5" y="5" width="14" height="14" rx="2.5" />
+              </svg>
+              <span class="text-[9px] font-bold font-mono leading-none mt-0.5">STOP</span>
+            </button>
+
+            <!-- Forward +5s -->
+            <button id="btnForward" class="player-btn-secondary" title="Avanzar 5 segundos (Flecha Derecha)">
+              <svg class="w-4 h-4 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M23 4v6h-6M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+              </svg>
+              <span class="text-[9px] font-bold font-mono leading-none mt-0.5">+5s</span>
+            </button>
+
+          </div>
+        </div>
+
+        <!-- DECK 2: PROMPTER DE LÍNEA ACTIVA -->
+        <div class="glass-deck p-3.5">
+          <div class="flex items-center justify-between text-[10px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
+            <span class="text-indigo-400 flex items-center gap-1.5">
+              <span id="activeDot" class="w-1.5 h-1.5 rounded-full bg-slate-600"></span>
+              Subtítulo en Reproducción
+            </span>
+            <span id="activeCueTimeBadge" class="text-slate-400 font-mono bg-slate-950/80 px-2 py-0.5 rounded border border-white/5">--:--</span>
+          </div>
+          <div class="bg-slate-950/70 border border-white/5 rounded-xl p-3 min-h-[55px] flex items-center justify-center text-center shadow-inner">
+            <p id="currentSubText" class="text-xs text-slate-200 font-medium leading-relaxed italic">
+              Presiona Reproducir o haz clic en cualquier frase...
+            </p>
+          </div>
+        </div>
+
+        <!-- DECK 3: GESTOR DE TAREAS & PROGRESO -->
+        <div class="glass-deck p-3.5">
+          <div class="flex items-center justify-between mb-1.5">
+            <div class="flex items-center gap-1.5 text-xs font-semibold text-slate-200">
+              <svg class="w-4 h-4 text-emerald-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>Gestor de Tareas</span>
+            </div>
+            <span id="taskStatsBadge" class="text-[11px] font-mono text-emerald-400 font-semibold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+              0 / 0 (0%)
+            </span>
+          </div>
+
+          <!-- Barra de Progreso de Tareas -->
+          <div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mb-2">
+            <div id="taskProgressBar" class="h-full bg-gradient-to-r from-emerald-500 to-teal-400 transition-all duration-300" style="width: 0%"></div>
+          </div>
+
+          <div class="flex items-center justify-between text-[11px] text-slate-400">
+            <span>Control de líneas revisadas</span>
+            <button id="btnAutoScroll" class="text-[10px] px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-indigo-300 hover:text-white transition flex items-center gap-1">
+              <span id="autoScrollIcon">🔒</span> Auto-scroll
+            </button>
+          </div>
+        </div>
+
+        <!-- DECK 4: SÍNTESIS DE VOZ (TTS) -->
+        <div class="glass-deck p-3.5 space-y-2.5">
+          <div class="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+            <span class="flex items-center gap-1.5 text-indigo-400">
+              <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Voz del Sintetizador
+            </span>
+          </div>
+          <div>
+            <select id="voiceSelect" class="w-full bg-slate-950 border border-white/10 text-slate-200 text-xs rounded-xl p-2 outline-none focus:border-indigo-500 transition">
+              <option value="">Cargando voces del sistema...</option>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <div class="bg-slate-950/50 p-2 rounded-xl border border-white/5">
+              <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                <span>Velocidad</span>
+                <span id="rateLabel" class="text-indigo-400 font-mono font-bold">1.0x</span>
+              </div>
+              <input type="range" id="rateRange" min="0.5" max="2.0" step="0.1" value="1.0" class="w-full h-1 bg-slate-800 rounded accent-indigo-500 cursor-pointer">
+            </div>
+            <div class="bg-slate-950/50 p-2 rounded-xl border border-white/5">
+              <div class="flex justify-between text-[10px] text-slate-400 mb-1">
+                <span>Tono</span>
+                <span id="pitchLabel" class="text-indigo-400 font-mono font-bold">1.0</span>
+              </div>
+              <input type="range" id="pitchRange" min="0.5" max="1.5" step="0.1" value="1.0" class="w-full h-1 bg-slate-800 rounded accent-indigo-500 cursor-pointer">
+            </div>
+          </div>
+        </div>
+
+        <!-- DECK 5: CALIBRACIÓN DESFASE (OFFSET) -->
+        <div class="glass-deck p-3">
+          <div class="flex items-center justify-between mb-1.5">
+            <span class="text-[11px] font-medium text-slate-400">Calibración de Desfase</span>
+            <span id="offsetValue" class="text-[11px] font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 font-semibold">0.0s</span>
+          </div>
+          <div class="grid grid-cols-3 gap-1.5 text-[11px] font-mono">
+            <button id="btnOffsetMinus" class="bg-slate-950 hover:bg-slate-800 border border-white/5 py-1.5 rounded-lg text-slate-300 active:scale-95 transition">-0.5s</button>
+            <button id="btnOffsetReset" class="bg-slate-950 hover:bg-slate-800 border border-white/5 py-1.5 rounded-lg text-slate-400 hover:text-white active:scale-95 transition">Reset</button>
+            <button id="btnOffsetPlus" class="bg-slate-950 hover:bg-slate-800 border border-white/5 py-1.5 rounded-lg text-slate-300 active:scale-95 transition">+0.5s</button>
+          </div>
+        </div>
+
+      </div>
+    </aside>
+
+    <!-- 2. CONTENIDO PRINCIPAL: CUADRO DE SUBTÍTULOS CON SCROLL -->
+    <main class="main-content">
+      
+      <!-- Barra Superior de Herramientas -->
+      <header class="h-16 border-b border-white/10 px-4 md:px-6 flex items-center justify-between gap-3 bg-slate-950/70 shrink-0 backdrop-blur-md">
+        
+        <!-- Pestañas de Vista (Lector vs Conversor) -->
+        <div class="flex items-center gap-1.5 bg-slate-900 border border-white/10 rounded-xl p-1 text-xs">
+          <button id="tabSubtitlesBtn" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium transition flex items-center gap-1.5 shadow">
+            <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h7"/></svg>
+            <span>Lector de Subtítulos</span>
+          </button>
+          <button id="tabConverterBtn" class="px-3 py-1.5 rounded-lg text-slate-400 hover:text-emerald-300 font-medium transition flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5 text-emerald-400 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"/></svg>
+            <span>Conversor .TXT &rarr; .SRT</span>
+          </button>
+        </div>
+
+        <!-- Cargar Archivo & Presets (Para vista de subtítulos) -->
+        <div id="readerHeaderActions" class="flex items-center gap-2">
+          <label for="fileInput" class="cursor-pointer bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white font-medium px-3 py-1.5 rounded-xl text-xs transition flex items-center gap-2 border border-white/10 active:scale-95 shadow">
+            <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span>Cargar Subtítulo</span>
+          </label>
+          <input type="file" id="fileInput" accept=".srt,.vtt,.ass,.ssa,.sub,.txt" class="hidden">
+          
+          <button id="btnSample" class="bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white px-3 py-1.5 rounded-xl text-xs transition border border-white/10 active:scale-95 flex items-center gap-1.5">
+            <span>🚀 Demo</span>
+          </button>
+
+          <!-- Input Búsqueda -->
+          <div class="relative w-36 sm:w-52">
+            <input type="text" id="searchInput" placeholder="Buscar texto..."
+                   class="w-full bg-slate-900 border border-white/10 rounded-xl text-xs px-3 py-1.5 pl-8 text-slate-200 outline-none focus:border-indigo-500 transition placeholder-slate-500">
+            <svg class="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+
+          <!-- Filtro Chips -->
+          <div class="hidden sm:flex bg-slate-900 border border-white/10 rounded-xl p-1 text-xs text-slate-400">
+            <button id="filterAll" class="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-medium transition">Todos</button>
+            <button id="filterPending" class="px-2.5 py-1 rounded-lg hover:text-white transition">Pendientes</button>
+            <button id="filterDone" class="px-2.5 py-1 rounded-lg hover:text-white transition">Listas</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Cuadro de Subtítulos con Scroll Vertical Independiente -->
+      <div id="subtitlesList" class="subtitles-scroll-box custom-scrollbar">
+        <!-- Generado dinámicamente -->
+      </div>
+
+      <!-- SECCIÓN CONVERSOR .TXT / TIEMPOS A .SRT / .VTT -->
+      <div id="converterSection" class="hidden flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+        
+        <!-- Barra de Acción Rápida del Conversor -->
+        <div class="flex flex-wrap items-center justify-between gap-3 p-3.5 rounded-2xl bg-slate-900/80 border border-white/10 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
+              <span class="text-sm font-bold">⚡</span>
+            </div>
+            <div>
+              <h2 class="text-sm font-bold text-white flex items-center gap-2">
+                Conversor de Texto a Subtítulos
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  .SRT / .VTT
+                </span>
+              </h2>
+              <p class="text-[11px] text-slate-400">
+                Pega texto con marcas de tiempo (00:02 Frase...) o texto plano de un archivo .txt para leerlo con voz.
+              </p>
+            </div>
+          </div>
+
+          <!-- Botón Maestro: Cargar y Escuchar -->
+          <button id="btnLoadAndSpeak" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-emerald-600/30 active:scale-95 transition">
+            <span>🎧 Cargar en Lector y Escuchar</span>
+            <svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14 5l7 7m0 0l-7 7m7-7H3"/></svg>
+          </button>
+        </div>
+
+        <!-- Cuadrícula 2 Columnas -->
+        <div class="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-[420px]">
+          
+          <!-- COLUMNA IZQUIERDA: Entrada de texto o .txt -->
+          <div class="flex flex-col bg-slate-950/70 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex items-center justify-between gap-2 mb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="text-xs font-semibold text-slate-200">1. Texto de Entrada</span>
+                <span id="convLineCounter" class="text-[10px] text-slate-500 font-mono">(0 líneas)</span>
+              </div>
+              <div class="flex items-center gap-1.5 text-xs">
+                <button id="btnConvSampleTimed" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-white/5 rounded-lg text-slate-300 text-[11px] transition">⏱️ Ej. Con Tiempos</button>
+                <button id="btnConvSamplePlain" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-white/5 rounded-lg text-slate-300 text-[11px] transition">📝 Ej. Texto Plano</button>
+                <label for="txtFilePicker" class="cursor-pointer px-2 py-1 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 rounded-lg text-indigo-300 text-[11px] transition">
+                  📂 Subir .txt
+                </label>
+                <input type="file" id="txtFilePicker" accept=".txt,.text,.md" class="hidden">
+                <button id="btnConvClear" class="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-white/5 rounded-lg text-slate-400 hover:text-rose-400 text-[11px] transition">Limpiar</button>
+              </div>
+            </div>
+
+            <!-- Área de Texto de Entrada -->
+            <textarea id="convInput" rows="12" class="w-full flex-1 bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 outline-none focus:border-indigo-500 resize-none custom-scrollbar placeholder-slate-500" placeholder="Pega aquí tus subtítulos con tiempos (ej: 00:02 Frase...) o texto plano separado en líneas..."></textarea>
+
+            <!-- Controles de Ritmo y Pausa -->
+            <div class="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-800/80 text-xs">
+              <div class="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
+                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>Velocidad (Palabras/Minuto)</span>
+                  <span id="convWpmLabel" class="text-indigo-400 font-mono font-bold">140 ppm</span>
+                </div>
+                <input type="range" id="convWpmRange" min="80" max="220" step="10" value="140" class="w-full h-1 bg-slate-800 rounded accent-indigo-500 cursor-pointer">
+              </div>
+
+              <div class="bg-slate-900/50 p-2.5 rounded-xl border border-white/5">
+                <div class="flex justify-between text-[11px] text-slate-400 mb-1">
+                  <span>Pausa entre subtítulos</span>
+                  <span id="convPauseLabel" class="text-indigo-400 font-mono font-bold">0.5s</span>
+                </div>
+                <input type="range" id="convPauseRange" min="0.1" max="2.0" step="0.1" value="0.5" class="w-full h-1 bg-slate-800 rounded accent-indigo-500 cursor-pointer">
+              </div>
+            </div>
+          </div>
+
+          <!-- COLUMNA DERECHA: Vista Previa y Exportación .SRT / .VTT -->
+          <div class="flex flex-col bg-slate-950/70 border border-slate-800 rounded-2xl p-4 shadow-xl">
+            <div class="flex items-center justify-between gap-2 mb-2.5">
+              <div class="flex items-center gap-1.5">
+                <span class="text-xs font-semibold text-slate-200">2. Subtítulos Generados</span>
+                <div class="flex bg-slate-900 border border-white/10 rounded-lg p-0.5 text-xs">
+                  <button id="btnFormatSrt" class="px-2.5 py-0.5 rounded bg-indigo-600 text-white font-medium transition text-[11px]">.SRT</button>
+                  <button id="btnFormatVtt" class="px-2.5 py-0.5 rounded text-slate-400 hover:text-white transition text-[11px]">.VTT</button>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-1.5 text-xs">
+                <button id="btnConvCopy" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-white/5 rounded-lg text-slate-300 text-[11px] transition active:scale-95">
+                  <span id="convCopyLabel">📋 Copiar</span>
+                </button>
+                <button id="btnConvDownload" class="px-2.5 py-1 bg-slate-900 hover:bg-slate-800 border border-white/5 rounded-lg text-emerald-400 hover:text-emerald-300 text-[11px] transition active:scale-95 font-medium">
+                  💾 Descargar
+                </button>
+              </div>
+            </div>
+
+            <!-- Área de Texto de Salida -->
+            <textarea id="convOutput" readonly rows="12" class="w-full flex-1 bg-slate-900/80 border border-slate-800 rounded-xl p-3 text-xs font-mono text-emerald-400/90 outline-none resize-none custom-scrollbar select-text"></textarea>
+
+            <!-- Pie de Info de Conversión -->
+            <div class="mt-3 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-400">
+              <span id="convStatusInfo">0 subtítulos generados</span>
+              <span id="convDurationInfo" class="font-mono text-indigo-300">Duración: 00:00</span>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Pie de página info -->
+      <footer class="h-9 px-6 border-t border-white/5 bg-slate-950/80 flex items-center justify-between text-[11px] text-slate-500 shrink-0">
+        <span id="footerLinesCount">Cargando subtítulos...</span>
+        <span class="font-mono text-slate-600">Espacio = Play/Pause &bull; Flechas = &plusmn;5s</span>
+      </footer>
+
+    </main>
+
+  </div>
+
+  <!-- Script Lógico Integral -->
+  <script>
+    (function() {
+      // Estado de la Aplicación
+      let subtitles = [
+        { id: 1, start: 0.0, end: 4.2, text: 'Control de misión Kepler, iniciamos maniobra de inserción orbital en tres minutos.', completed: true, notes: 'Comprobada entonación' },
+        { id: 2, start: 4.8, end: 9.1, text: 'Entendido Comandante. Telemetría de propulsores secundarios estable al noventa y ocho por ciento.', completed: true, notes: '' },
+        { id: 3, start: 9.8, end: 14.5, text: 'Detectamos una anomalía térmica leve en el deflector magnético del ala izquierda.', completed: false, notes: 'Revisar terminología técnica' },
+        { id: 4, start: 15.2, end: 20.0, text: 'Compensando vectores de empuje. Atenuación disipada con éxito.', completed: false, notes: '' },
+        { id: 5, start: 20.6, end: 25.4, text: 'Coordenadas de órbita baja confirmadas. Vista panorámica del cuadrante visible.', completed: false, notes: '' },
+        { id: 6, start: 26.0, end: 31.0, text: 'Iniciando secuencia de desacople del módulo de carga. Todo el personal en sus puestos.', completed: false, notes: '' },
+        { id: 7, start: 32.0, end: 37.0, text: 'Desacople exitoso. Bienvenidos a la órbita de exploración Kepler.', completed: false, notes: '' }
+      ];
+
+      let isPlaying = false;
+      let currentTime = 0;
+      let timeOffset = 0;
+      let timerInterval = null;
+      let lastUpdateTime = Date.now();
+      let lastReadIndex = -1;
+      let currentFilter = 'all';
+      let searchQuery = '';
+      let autoScroll = true;
+
+      // Síntesis de Voz
+      let synth = ('speechSynthesis' in window) ? window.speechSynthesis : null;
+      let voices = [];
+      let selectedVoice = null;
+      let speechRate = 1.0;
+      let speechPitch = 1.0;
+
+      // Elementos del DOM
+      const timeDisplay = document.getElementById('timeDisplay');
+      const progressBar = document.getElementById('progressBar');
+      const currentTimeLabel = document.getElementById('currentTimeLabel');
+      const totalTimeLabel = document.getElementById('totalTimeLabel');
+      const btnPlayPause = document.getElementById('btnPlayPause');
+      const playSvg = document.getElementById('playSvg');
+      const pauseSvg = document.getElementById('pauseSvg');
+      const btnStop = document.getElementById('btnStop');
+      const btnRewind = document.getElementById('btnRewind');
+      const btnForward = document.getElementById('btnForward');
+      const currentSubText = document.getElementById('currentSubText');
+      const activeCueTimeBadge = document.getElementById('activeCueTimeBadge');
+      const activeDot = document.getElementById('activeDot');
+      const liveStatusDot = document.getElementById('liveStatusDot');
+      const liveStatusText = document.getElementById('liveStatusText');
+      const taskStatsBadge = document.getElementById('taskStatsBadge');
+      const taskProgressBar = document.getElementById('taskProgressBar');
+      const subtitlesList = document.getElementById('subtitlesList');
+      const voiceSelect = document.getElementById('voiceSelect');
+      const rateRange = document.getElementById('rateRange');
+      const rateLabel = document.getElementById('rateLabel');
+      const pitchRange = document.getElementById('pitchRange');
+      const pitchLabel = document.getElementById('pitchLabel');
+      const offsetValue = document.getElementById('offsetValue');
+      const offsetBadge = document.getElementById('offsetBadge');
+      const btnOffsetMinus = document.getElementById('btnOffsetMinus');
+      const btnOffsetPlus = document.getElementById('btnOffsetPlus');
+      const btnOffsetReset = document.getElementById('btnOffsetReset');
+      const btnAutoScroll = document.getElementById('btnAutoScroll');
+      const autoScrollIcon = document.getElementById('autoScrollIcon');
+      const fileInput = document.getElementById('fileInput');
+      const btnSample = document.getElementById('btnSample');
+      const searchInput = document.getElementById('searchInput');
+      const filterAll = document.getElementById('filterAll');
+      const filterPending = document.getElementById('filterPending');
+      const filterDone = document.getElementById('filterDone');
+      const footerLinesCount = document.getElementById('footerLinesCount');
+      const eqBars = document.querySelectorAll('.eq-bar');
+
+      // Funciones de Formato de Tiempo
+      function formatTime(sec) {
+        if (isNaN(sec) || sec < 0) sec = 0;
+        const hrs = Math.floor(sec / 3600);
+        const mins = Math.floor((sec % 3600) / 60);
+        const secs = Math.floor(sec % 60);
+        const ms = Math.floor((sec % 1) * 10);
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${pad(hrs)}:${pad(mins)}:${pad(secs)}.${ms}`;
+      }
+
+      function formatShort(sec) {
+        if (isNaN(sec) || sec < 0) sec = 0;
+        const mins = Math.floor((sec % 3600) / 60);
+        const secs = Math.floor(sec % 60);
+        const pad = (n) => n.toString().padStart(2, '0');
+        return `${pad(mins)}:${pad(secs)}`;
+      }
+
+      function getMaxDuration() {
+        return subtitles.length > 0 ? subtitles[subtitles.length - 1].end + 3 : 0;
+      }
+
+      // Cargar Voces del Sistema
+      function populateVoices() {
+        if (!synth) return;
+        voices = synth.getVoices() || [];
+        voiceSelect.innerHTML = '';
+        if (voices.length === 0) {
+          voiceSelect.innerHTML = '<option value="">Voz predeterminada del navegador</option>';
+          return;
+        }
+        let defaultIdx = voices.findIndex(v => v.lang && v.lang.toLowerCase().includes('es'));
+        if (defaultIdx === -1) defaultIdx = 0;
+        voices.forEach((v, i) => {
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = `${v.name} (${v.lang})`;
+          if (i === defaultIdx) opt.selected = true;
+          voiceSelect.appendChild(opt);
+        });
+        selectedVoice = voices[defaultIdx];
+      }
+      populateVoices();
+      if (synth && synth.onvoiceschanged !== undefined) {
+        synth.onvoiceschanged = populateVoices;
+      }
+
+      // Renderizar el Cuadro de Subtítulos con Scroll
+      function renderSubtitles() {
+        subtitlesList.innerHTML = '';
+        const filtered = subtitles.filter(sub => {
+          if (searchQuery && !sub.text.toLowerCase().includes(searchQuery.toLowerCase()) &&
+              !(sub.notes && sub.notes.toLowerCase().includes(searchQuery.toLowerCase()))) {
+            return false;
+          }
+          if (currentFilter === 'pending') return !sub.completed;
+          if (currentFilter === 'done') return sub.completed;
+          return true;
+        });
+
+        // Estadísticas de tareas
+        const total = subtitles.length;
+        const completed = subtitles.filter(s => s.completed).length;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        taskStatsBadge.textContent = `${completed} / ${total} (${percent}%)`;
+        taskProgressBar.style.width = `${percent}%`;
+        footerLinesCount.textContent = `${subtitles.length} líneas en total &bull; ${completed} revisadas`;
+
+        if (filtered.length === 0) {
+          subtitlesList.innerHTML = `
+            <div class="h-64 flex flex-col items-center justify-center text-center text-slate-500">
+              <svg class="w-12 h-12 mb-3 opacity-40 fill-none stroke-current stroke-1.5" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <p class="text-sm font-medium text-slate-400">No hay subtítulos que coincidan con la búsqueda.</p>
+            </div>
+          `;
+          return;
+        }
+
+        filtered.forEach(sub => {
+          const card = document.createElement('div');
+          card.id = 'cue-card-' + sub.id;
+          card.className = 'cue-card ' + (sub.completed ? 'cue-card-completed' : '');
+          
+          card.innerHTML = `
+            <div class="flex items-center justify-between text-xs mb-2">
+              <div class="flex items-center gap-2.5">
+                <div class="task-check-circle ${sub.completed ? 'checked' : ''}" title="${sub.completed ? 'Marcar como pendiente' : 'Marcar como completada'}">
+                  ${sub.completed ? '<svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>' : ''}
+                </div>
+                <span class="font-mono text-indigo-400 font-bold text-xs">#${sub.id}</span>
+                <span class="bg-slate-900 border border-white/10 px-2 py-0.5 rounded-lg text-[10px] font-mono text-slate-300">
+                  ${formatShort(sub.start)} &rarr; ${formatShort(sub.end)}
+                </span>
+                <span class="text-[10px] text-slate-500 font-mono hidden sm:inline">
+                  (${(sub.end - sub.start).toFixed(1)}s)
+                </span>
+              </div>
+              
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] text-indigo-400 font-medium opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 select-none">
+                  <svg class="w-3 h-3 fill-none stroke-current stroke-2 animate-pulse" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"/></svg>
+                  <span>Clic para leer</span>
+                </span>
+
+                <button class="jump-btn text-xs bg-indigo-600/30 hover:bg-indigo-600 text-indigo-300 hover:text-white px-2.5 py-1 rounded-lg border border-indigo-500/40 transition flex items-center gap-1 active:scale-95 font-semibold" data-start="${sub.start}">
+                  <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  <span>Escuchar</span>
+                </button>
+              </div>
+            </div>
+
+            <p class="cue-text text-sm md:text-base leading-relaxed text-slate-100 font-medium group-hover:text-white ${sub.completed ? 'line-through text-slate-400' : ''}">
+              ${escapeHtml(sub.text)}
+            </p>
+
+            ${sub.notes ? `
+              <div class="mt-2.5 pt-2 border-t border-white/5 flex items-center justify-between text-xs text-amber-300 bg-amber-500/10 px-2.5 py-1.5 rounded-xl border border-amber-500/20">
+                <span><strong>Tarea/Nota:</strong> ${escapeHtml(sub.notes)}</span>
+              </div>` : ''}
+          `;
+
+          // Eventos de la tarjeta: Clic en cualquier parte de la línea para leerla
+          card.addEventListener('click', () => {
+            playLine(sub);
+          });
+
+          const jumpBtn = card.querySelector('.jump-btn');
+          jumpBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            playLine(sub);
+          });
+
+          const checkBtn = card.querySelector('.task-check-circle');
+          checkBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            sub.completed = !sub.completed;
+            renderSubtitles();
+          });
+
+          subtitlesList.appendChild(card);
+        });
+      }
+
+      function escapeHtml(text) {
+        return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      // Reproducir Línea Específica directamente
+      function playLine(sub) {
+        if (!sub) return;
+        // Ajustar el tiempo para que adjusted caiga limpiamente dentro del intervalo de la línea
+        const targetTime = Math.max(0, Math.min(sub.start + timeOffset + 0.05, getMaxDuration()));
+        currentTime = targetTime;
+        lastReadIndex = subtitles.indexOf(sub);
+        updatePlayerUI();
+        speak(sub.text);
+      }
+
+      // Reproducción y Sincronía
+      function togglePlay() {
+        if (isPlaying) {
+          pause();
+        } else {
+          play();
+        }
+      }
+
+      function play() {
+        isPlaying = true;
+        btnPlayPause.classList.add('is-playing');
+        playSvg.classList.add('hidden');
+        pauseSvg.classList.remove('hidden');
+        liveStatusDot.className = 'w-2 h-2 rounded-full bg-emerald-400 animate-ping';
+        liveStatusText.textContent = 'En Vivo';
+        lastUpdateTime = Date.now();
+        timerInterval = setInterval(tick, 40);
+        animateEqualizer();
+      }
+
+      function pause() {
+        isPlaying = false;
+        btnPlayPause.classList.remove('is-playing');
+        playSvg.classList.remove('hidden');
+        pauseSvg.classList.add('hidden');
+        liveStatusDot.className = 'w-2 h-2 rounded-full bg-amber-400';
+        liveStatusText.textContent = 'Pausa';
+        if (timerInterval) clearInterval(timerInterval);
+        if (synth) synth.cancel();
+        resetEqualizer();
+      }
+
+      function stop() {
+        pause();
+        currentTime = 0;
+        lastReadIndex = -1;
+        liveStatusDot.className = 'w-2 h-2 rounded-full bg-slate-600';
+        liveStatusText.textContent = 'Detenido';
+        updatePlayerUI();
+      }
+
+      function jumpTo(time) {
+        currentTime = Math.max(0, Math.min(time, getMaxDuration()));
+        const adjusted = currentTime - timeOffset;
+        const activeIdx = subtitles.findIndex(s => adjusted >= s.start && adjusted <= s.end);
+        if (activeIdx !== -1) {
+          lastReadIndex = activeIdx;
+          updatePlayerUI();
+          speak(subtitles[activeIdx].text);
+        } else {
+          lastReadIndex = -1;
+          if (synth) synth.cancel();
+          updatePlayerUI();
+        }
+      }
+
+      function tick() {
+        const now = Date.now();
+        const delta = (now - lastUpdateTime) / 1000;
+        lastUpdateTime = now;
+        currentTime += delta;
+        if (currentTime >= getMaxDuration()) {
+          stop();
+          return;
+        }
+        updatePlayerUI();
+      }
+
+      function updatePlayerUI() {
+        const max = getMaxDuration();
+        timeDisplay.textContent = formatTime(currentTime);
+        currentTimeLabel.textContent = formatShort(currentTime);
+        totalTimeLabel.textContent = formatShort(max);
+        progressBar.value = max > 0 ? (currentTime / max) * 100 : 0;
+
+        // Subtítulo activo con offset
+        const adjusted = currentTime - timeOffset;
+        let activeIdx = subtitles.findIndex(s => adjusted >= s.start && adjusted <= s.end);
+
+        // Fallback de tolerancia para asegurar que no se pierda la selección
+        if (activeIdx === -1 && lastReadIndex >= 0 && lastReadIndex < subtitles.length) {
+          const candidate = subtitles[lastReadIndex];
+          if (Math.abs(adjusted - candidate.start) < 0.3 || (adjusted >= candidate.start && adjusted <= candidate.end + 0.3)) {
+            activeIdx = lastReadIndex;
+          }
+        }
+
+        if (activeIdx !== -1) {
+          const activeSub = subtitles[activeIdx];
+          currentSubText.textContent = activeSub.text;
+          activeCueTimeBadge.textContent = `${formatShort(activeSub.start)} - ${formatShort(activeSub.end)}`;
+          activeDot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse';
+          
+          if (isPlaying && lastReadIndex !== activeIdx) {
+            lastReadIndex = activeIdx;
+            speak(activeSub.text);
+          }
+        } else {
+          currentSubText.innerHTML = '<span class="text-slate-500 italic">...</span>';
+          activeCueTimeBadge.textContent = '--:--';
+          activeDot.className = 'w-1.5 h-1.5 rounded-full bg-slate-600';
+        }
+
+        // Resaltar tarjeta activa
+        document.querySelectorAll('.cue-card').forEach(c => c.classList.remove('cue-card-active'));
+        if (activeIdx !== -1) {
+          const el = document.getElementById('cue-card-' + subtitles[activeIdx].id);
+          if (el) {
+            el.classList.add('cue-card-active');
+            if (autoScroll) {
+              el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
+          }
+        }
+      }
+
+      function cleanSubtitleForSpeech(rawText) {
+        if (!rawText) return '';
+        let cleaned = rawText;
+
+        // 1. Quitar símbolos musicales y notas
+        cleaned = cleaned.replace(/[♪♫♬♩#]/g, ' ');
+
+        // 2. Quitar descriptores entre corchetes, paréntesis o asteriscos de música o efectos
+        cleaned = cleaned.replace(/[s*(?:m[uú]sica|music|instrumental|canci[oó]n|melod[ií]a|aplausos|risas|silencio|sonido|audio|sfx|sound|applause|laughter)[^]]*]/gi, ' ');
+        cleaned = cleaned.replace(/(s*(?:m[uú]sica|music|instrumental|canci[oó]n|melod[ií]a|aplausos|risas|silencio|sonido|audio|sfx|sound|applause|laughter)[^)]*)/gi, ' ');
+        cleaned = cleaned.replace(/*s*(?:m[uú]sica|music|instrumental)[^*]**/gi, ' ');
+
+        // Quitar cualquier mención genérica entre corchetes o paréntesis con "music" o "música"
+        cleaned = cleaned.replace(/[[^]]*(?:m[uú]sica|music)[^]]*]/gi, ' ');
+        cleaned = cleaned.replace(/([^)]*(?:m[uú]sica|music)[^)]*)/gi, ' ');
+
+        // 3. Quitar "música", "musica", "music" entre comillas
+        cleaned = cleaned.replace(/["'«“‘]s*(?:m[uú]sica|music)s*["'»”’]/gi, ' ');
+
+        // 4. Si la línea completa es simplemente "música", "musica", "music" (con o sin puntuación circundante)
+        const strippedOfPunct = cleaned.replace(/[p{P}p{S}]/gu, '').trim();
+        if (/^(?:m[uú]sica|music)(?:s+(?:des+fondo|instrumental|ambiente|playing|stops|starts|fades?|intro|outro))?$/i.test(strippedOfPunct)) {
+          return '';
+        }
+
+        // 5. Espacios y verificación de texto hablado real
+        cleaned = cleaned.replace(/s+/g, ' ').trim();
+        const lettersOrNumbers = cleaned.replace(/[^p{L}p{N}]/gu, '').trim();
+        if (!lettersOrNumbers) {
+          return '';
+        }
+
+        return cleaned;
+      }
+
+      function speak(text) {
+        if (!synth || !text) return;
+        try {
+          synth.cancel();
+          const speakable = cleanSubtitleForSpeech(text);
+          if (!speakable) {
+            // Mantenemos silencio: no se sintetiza ni se lee
+            return;
+          }
+          if (synth.paused) synth.resume();
+          // Timeout ligero para que el motor de voz del navegador restablezca el canal de audio
+          setTimeout(() => {
+            try {
+              if (synth.paused) synth.resume();
+              const utt = new SpeechSynthesisUtterance(speakable);
+              if (selectedVoice) utt.voice = selectedVoice;
+              utt.rate = speechRate;
+              utt.pitch = speechPitch;
+              synth.speak(utt);
+            } catch(innerErr) {
+              console.warn('Error leyendo línea', innerErr);
+            }
+          }, 25);
+        } catch(e) {
+          console.warn(e);
+        }
+      }
+
+      function animateEqualizer() {
+        eqBars.forEach((bar, i) => {
+          const rand = Math.floor(Math.random() * 20) + 4;
+          bar.style.height = rand + 'px';
+        });
+        if (isPlaying) {
+          setTimeout(animateEqualizer, 100);
+        }
+      }
+
+      function resetEqualizer() {
+        eqBars.forEach((bar, i) => {
+          bar.style.height = (i % 2 === 0 ? '6px' : '3px');
+        });
+      }
+
+      // Conexión de Botones
+      btnPlayPause.addEventListener('click', togglePlay);
+      btnStop.addEventListener('click', stop);
+      btnRewind.addEventListener('click', () => jumpTo(currentTime - 5));
+      btnForward.addEventListener('click', () => jumpTo(currentTime + 5));
+
+      progressBar.addEventListener('input', (e) => {
+        const max = getMaxDuration();
+        jumpTo((parseFloat(e.target.value) / 100) * max);
+      });
+
+      voiceSelect.addEventListener('change', () => {
+        selectedVoice = voices[voiceSelect.value];
+      });
+
+      rateRange.addEventListener('input', (e) => {
+        speechRate = parseFloat(e.target.value);
+        rateLabel.textContent = speechRate.toFixed(1) + 'x';
+      });
+
+      pitchRange.addEventListener('input', (e) => {
+        speechPitch = parseFloat(e.target.value);
+        pitchLabel.textContent = speechPitch.toFixed(1);
+      });
+
+      btnOffsetMinus.addEventListener('click', () => {
+        timeOffset -= 0.5;
+        updateOffsetUI();
+      });
+      btnOffsetPlus.addEventListener('click', () => {
+        timeOffset += 0.5;
+        updateOffsetUI();
+      });
+      btnOffsetReset.addEventListener('click', () => {
+        timeOffset = 0;
+        updateOffsetUI();
+      });
+
+      function updateOffsetUI() {
+        const sign = timeOffset >= 0 ? '+' : '';
+        offsetValue.textContent = sign + timeOffset.toFixed(1) + 's';
+        offsetBadge.textContent = timeOffset !== 0 ? `(${sign}${timeOffset.toFixed(1)}s)` : '';
+        updatePlayerUI();
+      }
+
+      btnAutoScroll.addEventListener('click', () => {
+        autoScroll = !autoScroll;
+        autoScrollIcon.textContent = autoScroll ? '🔒' : '🔓';
+      });
+
+      // Búsqueda y Filtros
+      searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.trim();
+        renderSubtitles();
+      });
+
+      filterAll.addEventListener('click', () => {
+        currentFilter = 'all';
+        setActiveFilter(filterAll);
+      });
+      filterPending.addEventListener('click', () => {
+        currentFilter = 'pending';
+        setActiveFilter(filterPending);
+      });
+      filterDone.addEventListener('click', () => {
+        currentFilter = 'done';
+        setActiveFilter(filterDone);
+      });
+
+      function setActiveFilter(btn) {
+        [filterAll, filterPending, filterDone].forEach(b => {
+          b.className = 'px-2.5 py-1 rounded-lg hover:text-white transition';
+        });
+        btn.className = 'px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-medium transition';
+        renderSubtitles();
+      }
+
+      // Carga de Subtítulos (.srt, .vtt)
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            parseSubtitleFile(evt.target.result);
+          };
+          reader.readAsText(e.target.files[0]);
+        }
+      });
+
+      function parseSubtitleFile(content) {
+        const blocks = content.replace(/\r\n/g, '\n').split(/\n\n+/);
+        const parsed = [];
+        blocks.forEach((block, idx) => {
+          const lines = block.trim().split('\n');
+          let tIdx = lines.findIndex(l => l.includes('-->'));
+          if (tIdx !== -1) {
+            const m = lines[tIdx].match(/(\d{1,2}:\d{2}:\d{2}[\.,]\d{2,3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[\.,]\d{2,3})/);
+            if (m) {
+              const start = parseSeconds(m[1]);
+              const end = parseSeconds(m[2]);
+              const text = lines.slice(tIdx + 1).join(' ').replace(/<[^>]*>/g, '').trim();
+              if (text) {
+                parsed.push({ id: idx + 1, start, end, text, completed: false, notes: '' });
+              }
+            }
+          }
+        });
+        if (parsed.length > 0) {
+          subtitles = parsed;
+          stop();
+          renderSubtitles();
+        }
+      }
+
+      function parseSeconds(str) {
+        const parts = str.replace(',', '.').split(':');
+        if (parts.length === 3) return parseFloat(parts[0]) * 3600 + parseFloat(parts[1]) * 60 + parseFloat(parts[2]);
+        if (parts.length === 2) return parseFloat(parts[0]) * 60 + parseFloat(parts[1]);
+        return parseFloat(parts[0]) || 0;
+      }
+
+      btnSample.addEventListener('click', () => {
+        subtitles = [
+          { id: 1, start: 0.0, end: 4.2, text: 'Control de misión Kepler, iniciamos maniobra de inserción orbital en tres minutos.', completed: true, notes: 'Comprobada entonación' },
+          { id: 2, start: 4.8, end: 9.1, text: 'Entendido Comandante. Telemetría de propulsores secundarios estable al noventa y ocho por ciento.', completed: true, notes: '' },
+          { id: 3, start: 9.8, end: 14.5, text: 'Detectamos una anomalía térmica leve en el deflector magnético del ala izquierda.', completed: false, notes: 'Revisar terminología técnica' },
+          { id: 4, start: 15.2, end: 20.0, text: 'Compensando vectores de empuje. Atenuación disipada con éxito.', completed: false, notes: '' },
+          { id: 5, start: 20.6, end: 25.4, text: 'Coordenadas de órbita baja confirmadas. Vista panorámica del cuadrante visible.', completed: false, notes: '' }
+        ];
+        stop();
+        renderSubtitles();
+      });
+
+      // --- LÓGICA DEL CONVERSOR .TXT / TIEMPOS A .SRT / .VTT ---
+      const tabSubtitlesBtn = document.getElementById('tabSubtitlesBtn');
+      const tabConverterBtn = document.getElementById('tabConverterBtn');
+      const readerHeaderActions = document.getElementById('readerHeaderActions');
+      const converterSection = document.getElementById('converterSection');
+      const convInput = document.getElementById('convInput');
+      const convLineCounter = document.getElementById('convLineCounter');
+      const btnConvSampleTimed = document.getElementById('btnConvSampleTimed');
+      const btnConvSamplePlain = document.getElementById('btnConvSamplePlain');
+      const txtFilePicker = document.getElementById('txtFilePicker');
+      const btnConvClear = document.getElementById('btnConvClear');
+      const convWpmRange = document.getElementById('convWpmRange');
+      const convWpmLabel = document.getElementById('convWpmLabel');
+      const convPauseRange = document.getElementById('convPauseRange');
+      const convPauseLabel = document.getElementById('convPauseLabel');
+      const btnFormatSrt = document.getElementById('btnFormatSrt');
+      const btnFormatVtt = document.getElementById('btnFormatVtt');
+      const convOutput = document.getElementById('convOutput');
+      const btnConvCopy = document.getElementById('btnConvCopy');
+      const convCopyLabel = document.getElementById('convCopyLabel');
+      const btnConvDownload = document.getElementById('btnConvDownload');
+      const btnLoadAndSpeak = document.getElementById('btnLoadAndSpeak');
+      const convStatusInfo = document.getElementById('convStatusInfo');
+      const convDurationInfo = document.getElementById('convDurationInfo');
+
+      const CONV_SAMPLE_TIMED = `00:02 Introducción a la exploración espacial moderna.
+00:07 Los telescopios orbitales han abierto una nueva ventana al cosmos.
+00:13 Analizamos la composición espectral de planetas lejanos.
+00:19 La búsqueda de biomarcadores químicos continúa día tras día.
+00:25 Cada descubrimiento redefine nuestra perspectiva del universo.`;
+
+      const CONV_SAMPLE_PLAIN = `El sistema solar se formó hace cuatro mil seiscientos millones de años.
+Una vasta nube molecular de gas y polvo colapsó bajo su propia gravedad.
+En el centro, la mayor parte de la masa dio nacimiento al Sol.
+El resto de la materia se aplanó en un disco que formó los planetas.
+Hoy en día, exploramos mundos helados con posibles océanos subterráneos.`;
+
+      convInput.value = CONV_SAMPLE_TIMED;
+
+      let currentConvFormat = 'srt';
+      let convertedCues = [];
+      let convertedSrt = '';
+      let convertedVtt = '';
+
+      function switchViewTab(mode) {
+        if (mode === 'subtitles') {
+          tabSubtitlesBtn.className = 'px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium transition flex items-center gap-1.5 shadow';
+          tabConverterBtn.className = 'px-3 py-1.5 rounded-lg text-slate-400 hover:text-emerald-300 font-medium transition flex items-center gap-1.5';
+          subtitlesList.classList.remove('hidden');
+          readerHeaderActions.classList.remove('hidden');
+          converterSection.classList.add('hidden');
+        } else {
+          tabConverterBtn.className = 'px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-medium transition flex items-center gap-1.5 shadow';
+          tabSubtitlesBtn.className = 'px-3 py-1.5 rounded-lg text-slate-400 hover:text-indigo-300 font-medium transition flex items-center gap-1.5';
+          subtitlesList.classList.add('hidden');
+          readerHeaderActions.classList.add('hidden');
+          converterSection.classList.remove('hidden');
+          runConversion();
+        }
+      }
+
+      tabSubtitlesBtn.addEventListener('click', () => switchViewTab('subtitles'));
+      tabConverterBtn.addEventListener('click', () => switchViewTab('converter'));
+
+      function formatTimestampSRT(sec) {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        const ms = Math.floor((sec % 1) * 1000);
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + ',' + String(ms).padStart(3, '0');
+      }
+
+      function formatTimestampVTT(sec) {
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = Math.floor(sec % 60);
+        const ms = Math.floor((sec % 1) * 1000);
+        return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0') + '.' + String(ms).padStart(3, '0');
+      }
+
+      function runConversion() {
+        const text = convInput.value;
+        const rawLines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        convLineCounter.textContent = `(${rawLines.length} líneas)`;
+
+        if (rawLines.length === 0) {
+          convertedCues = [];
+          convertedSrt = '';
+          convertedVtt = '';
+          convOutput.value = '';
+          convStatusInfo.textContent = '0 subtítulos generados';
+          convDurationInfo.textContent = 'Duración: 00:00';
+          return;
+        }
+
+        const wpm = parseInt(convWpmRange.value, 10) || 140;
+        const pause = parseFloat(convPauseRange.value) || 0.5;
+        const wordsPerSec = Math.max(wpm / 60, 1.2);
+
+        // Comprobar si hay formato con tiempos tipo YouTube o marcas
+        const timeRegex = /^(?:\[?(\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d{2,3})?)\]?)(?:\s*[-–—~>]+\s*\[?(\d{1,2}:\d{2}(?::\d{2})?(?:[\.,]\d{2,3})?)\]?)?[\s:.-]+(.+)$/;
+        
+        let hasTimestamps = false;
+        let cues = [];
+        let parsedWithTimes = [];
+
+        rawLines.forEach(line => {
+          const m = line.match(timeRegex);
+          if (m && m[1] && m[3]) {
+            hasTimestamps = true;
+            const start = parseSeconds(m[1]);
+            const end = m[2] ? parseSeconds(m[2]) : null;
+            parsedWithTimes.push({ start, end, text: m[3].trim() });
+          }
+        });
+
+        if (hasTimestamps && parsedWithTimes.length >= rawLines.length * 0.4) {
+          // Secuencia basada en marcas de tiempo
+          for (let i = 0; i < parsedWithTimes.length; i++) {
+            const item = parsedWithTimes[i];
+            let start = item.start;
+            let end = item.end;
+            if (end === null || end <= start) {
+              const wordCount = item.text.split(/\s+/).length;
+              const estDur = Math.max(wordCount / wordsPerSec, 2.0);
+              const nextStart = parsedWithTimes[i + 1] ? parsedWithTimes[i + 1].start : null;
+              if (nextStart !== null && nextStart > start) {
+                end = Math.min(start + estDur, Math.max(start + 1.0, nextStart - 0.2));
+              } else {
+                end = start + estDur;
+              }
+            }
+            cues.push({ id: i + 1, start, end, text: item.text });
+          }
+        } else {
+          // Texto plano / párrafos continuos
+          let currentTimeCursor = 0;
+          rawLines.forEach((line, idx) => {
+            const wordCount = line.split(/\s+/).length;
+            const duration = Math.max(wordCount / wordsPerSec, 2.0);
+            const start = currentTimeCursor;
+            const end = start + duration;
+            cues.push({ id: idx + 1, start, end, text: line });
+            currentTimeCursor = end + pause;
+          });
+        }
+
+        convertedCues = cues;
+
+        // Construir SRT
+        convertedSrt = cues.map(c => {
+          return `${c.id}\n${formatTimestampSRT(c.start)} --> ${formatTimestampSRT(c.end)}\n${c.text}`;
+        }).join('\n\n');
+
+        // Construir VTT
+        convertedVtt = 'WEBVTT\n\n' + cues.map(c => {
+          return `${c.id}\n${formatTimestampVTT(c.start)} --> ${formatTimestampVTT(c.end)}\n${c.text}`;
+        }).join('\n\n');
+
+        convOutput.value = currentConvFormat === 'vtt' ? convertedVtt : convertedSrt;
+        convStatusInfo.textContent = `${cues.length} subtítulos generados (${hasTimestamps ? 'con marcas de tiempo' : 'por ritmo de lectura'})`;
+        
+        const totalDur = cues.length > 0 ? cues[cues.length - 1].end : 0;
+        const durM = Math.floor(totalDur / 60);
+        const durS = Math.floor(totalDur % 60);
+        convDurationInfo.textContent = 'Duración: ' + String(durM).padStart(2, '0') + ':' + String(durS).padStart(2, '0');
+      }
+
+      convInput.addEventListener('input', runConversion);
+      
+      convWpmRange.addEventListener('input', (e) => {
+        convWpmLabel.textContent = e.target.value + ' ppm';
+        runConversion();
+      });
+
+      convPauseRange.addEventListener('input', (e) => {
+        convPauseLabel.textContent = parseFloat(e.target.value).toFixed(1) + 's';
+        runConversion();
+      });
+
+      btnConvSampleTimed.addEventListener('click', () => {
+        convInput.value = CONV_SAMPLE_TIMED;
+        runConversion();
+      });
+
+      btnConvSamplePlain.addEventListener('click', () => {
+        convInput.value = CONV_SAMPLE_PLAIN;
+        runConversion();
+      });
+
+      btnConvClear.addEventListener('click', () => {
+        convInput.value = '';
+        runConversion();
+      });
+
+      txtFilePicker.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            convInput.value = evt.target.result;
+            runConversion();
+          };
+          reader.readAsText(e.target.files[0]);
+        }
+      });
+
+      btnFormatSrt.addEventListener('click', () => {
+        currentConvFormat = 'srt';
+        btnFormatSrt.className = 'px-2.5 py-0.5 rounded bg-indigo-600 text-white font-medium transition text-[11px]';
+        btnFormatVtt.className = 'px-2.5 py-0.5 rounded text-slate-400 hover:text-white transition text-[11px]';
+        convOutput.value = convertedSrt;
+      });
+
+      btnFormatVtt.addEventListener('click', () => {
+        currentConvFormat = 'vtt';
+        btnFormatVtt.className = 'px-2.5 py-0.5 rounded bg-indigo-600 text-white font-medium transition text-[11px]';
+        btnFormatSrt.className = 'px-2.5 py-0.5 rounded text-slate-400 hover:text-white transition text-[11px]';
+        convOutput.value = convertedVtt;
+      });
+
+      btnConvCopy.addEventListener('click', () => {
+        const text = currentConvFormat === 'vtt' ? convertedVtt : convertedSrt;
+        navigator.clipboard.writeText(text);
+        convCopyLabel.textContent = '✓ ¡Copiado!';
+        setTimeout(() => { convCopyLabel.textContent = '📋 Copiar'; }, 2000);
+      });
+
+      btnConvDownload.addEventListener('click', () => {
+        const text = currentConvFormat === 'vtt' ? convertedVtt : convertedSrt;
+        const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `subtitulos_convertidos.${currentConvFormat}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      });
+
+      // Cargar en el Lector y escuchar directamente
+      btnLoadAndSpeak.addEventListener('click', () => {
+        if (convertedCues.length === 0) runConversion();
+        if (convertedCues.length === 0) return;
+
+        subtitles = convertedCues.map((c, i) => ({
+          id: i + 1,
+          start: c.start,
+          end: c.end,
+          text: c.text,
+          completed: false,
+          notes: ''
+        }));
+
+        switchViewTab('subtitles');
+        stop();
+        renderSubtitles();
+
+        if (subtitles.length > 0) {
+          playLine(subtitles[0]);
+        }
+      });
+
+      // Atajos de Teclado
+      window.addEventListener('keydown', (e) => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.code === 'Space') {
+          e.preventDefault();
+          togglePlay();
+        } else if (e.code === 'ArrowLeft') {
+          e.preventDefault();
+          jumpTo(currentTime - 5);
+        } else if (e.code === 'ArrowRight') {
+          e.preventDefault();
+          jumpTo(currentTime + 5);
+        }
+      });
+
+      renderSubtitles();
+      updatePlayerUI();
+      resetEqualizer();
+    })();
+  </script>
+</body>
+</html>
